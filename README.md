@@ -72,7 +72,7 @@ Created a personal SQL knowledge base that can be reused for interviews and real
 
 Clone the repository:
 
-git clone https://github.com/yourusername/sql-practice.git
+git clone https://github.com/jgarij/SQL_Questions.git
 
 
 Open any .sql file in your SQL environment (MySQL, PostgreSQL, etc.).
