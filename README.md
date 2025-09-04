@@ -22,17 +22,17 @@ Window Functions: ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, NTILE, Frame Clause
 
 Advanced SQL: Date/time functions, conditional expressions, query optimization
 
-📁 sql-practice
- ┣ 📜 SQL-Basics.sql                # Beginner level queries
- ┣ 📜 SQL-Intermediate.sql          # Intermediate concepts
- ┣ 📜 SQL-Advance.sql               # Advanced SQL queries
- ┣ 📜 CombinationOfBasicToAdvance.sql # Mixed-level practice
- ┗ 📜 README.md
+sql-practice/
+├── SQL-Basics.sql               # Beginner level queries
+├── SQL-Intermediate.sql         # Intermediate concepts
+├── SQL-Advance.sql              # Advanced SQL queries
+├── CombinationOfBasicToAdvance.sql  # Mixed-level practice
+└── README.md
 
 
 🚀 Example Queries
 
-🚀 Example Queries
+
 1️⃣ Retrieve employees who earn more than the average salary
 SELECT name, salary
 FROM employees
