@@ -462,6 +462,14 @@ min(score_points) over(partition by gender order  by day)
 -- query 69
 create table logs(log_id int);
 insert into logs (log_id) values(1),(2),(3),(7),(8),(10);
+with cte as(select log_id,row_number() over(order by log_id) as rn
+from logs)
+select 
+min(log_id) as start_id ,
+max(log_id) as end_id
+from 
+cte group by log_id-rn;
+
 
 -- query 70
 CREATE TABLE Students (
@@ -803,8 +811,25 @@ INSERT INTO Calls (caller_id, callee_id, duration) VALUES
 (3, 12, 330),
 (12, 3, 5),
 (7, 9, 13);
-
-
+INSERT INTO Calls (caller_id, callee_id, duration) VALUES
+(7,1,3),
+(9,7,1),
+(1,7,7);
+with cte as(
+(select c.caller_id as pId,c.duration,ctr.country_code ,ctr.name
+from calls c join person p on p.id=c.caller_id 
+join country ctr 
+on cast(left(p.phone_number,3) as signed)=cast(ctr.country_code as signed)
+union all
+select c.callee_id as pId,c.duration,ctr.country_code  ,ctr.name
+from calls c join person p on p.id=c.callee_id
+join country ctr on left(p.phone_number,3)=ctr.country_code
+)
+)
+select name,country_code,
+avg(duration) over(partition by country_code order by country_code) avg_country,
+avg(duration) over()as avg_global
+from cte ; 
 
 -- query 80
 
@@ -888,6 +913,27 @@ and   u2.event_date like "2022-07%"
 group by month(u2.event_date);
 
 -- query 83
+create table search_frequency(
+
+searches int,num_user int);
+insert  into search_frequency () values(
+1,2),(2,2),(3,1),(4,2);
+with cte as(
+select searches, 
+row_number() over(order by searches) rn_asc,
+row_number() over(order by searches desc) rn_desc
+from search_frequency),
+total_terms as(
+select count(1)as n from search_frequency)
+select case when n%2=0  then 
+(select avg(searches) from cte where abs(cast(rn_asc as signed) - cast(rn_desc as signed)))
+else (select avg(searches) from cte where rn_asc=rn_desc)
+end as median
+from total_terms
+;
+
+;
+
 
 
 
@@ -994,3 +1040,572 @@ from transactions
 )select count(1) as payment_count from cte where mindiff<10;
 
 -- query 87
+-- Create customers table
+CREATE TABLE customers (
+    customer_id INT PRIMARY KEY,
+    signup_timestamp TIMESTAMP
+);
+
+-- Insert data into customers table
+INSERT INTO customers (customer_id, signup_timestamp) VALUES
+(8472, '2022-05-30 00:00:00'),
+(2341, '2022-06-01 00:00:00'),
+(1314, '2022-06-03 00:00:00'),
+(1435, '2022-06-05 00:00:00'),
+(5421, '2022-06-07 00:00:00');
+
+
+-- Create trips table
+CREATE TABLE trips (
+    dasher_id INT,
+    trip_id INT PRIMARY KEY,
+    estimated_delivery_timestamp TIMESTAMP,
+    actual_delivery_timestamp TIMESTAMP
+);
+
+-- Insert data into trips table
+INSERT INTO trips (dasher_id, trip_id, estimated_delivery_timestamp, actual_delivery_timestamp) VALUES
+(101, 100463, '2022-06-05 09:42:00', '2022-06-05 09:38:00'),
+(102, 100482, '2022-06-05 15:10:00', '2022-06-05 15:46:00'),
+(101, 100362, '2022-06-07 15:33:00', '2022-06-07 16:45:00'),
+(102, 100657, '2022-07-07 15:52:00', NULL),
+(103, 100213, '2022-06-12 14:13:00', '2022-06-12 14:10:00');
+
+
+-- Create orders table
+CREATE TABLE orders (
+    order_id INT PRIMARY KEY,
+    customer_id INT,
+    trip_id INT,
+    status VARCHAR(50),
+    order_timestamp TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    FOREIGN KEY (trip_id) REFERENCES trips(trip_id)
+);
+
+-- Insert data into orders table
+INSERT INTO orders (order_id, customer_id, trip_id, status, order_timestamp) VALUES
+(727424, 8472, 100463, 'completed successfully', '2022-06-05 09:12:00'),
+(242513, 2341, 100482, 'completed incorrectly', '2022-06-05 14:40:00'),
+(141367, 1314, 100362, 'completed incorrectly', '2022-06-07 15:03:00'),
+(582193, 5421, 100657, 'never_received', '2022-07-07 15:22:00'),
+(253613, 1314, 100213, 'completed successfully', '2022-06-12 13:43:00');
+
+with cte as(
+select c.customer_id,
+ sum(
+case 
+when o.status  in('never_received','completed incorrectly') then 1
+else 0
+end
+ )as bad_experience_per_user,count(*) as total_user_loggedin_June
+from customers c
+left join orders o
+on c.customer_id = o.customer_id
+and date_add(c.signup_timestamp,interval 14 day)>=o.order_timestamp
+where month(c.signup_timestamp)=6
+group by c.customer_id)
+select sum(case when bad_experience_per_user then 1 else 0 end)/count(1) as bad_experience_percentage from cte;
+
+-- query 90
+create table numbers(
+num int,
+frequency int
+);
+insert into numbers(
+) values
+(0,7),(1,1),(2,3),(3,1);
+insert into numbers () values(5,1);
+
+with cte as (select num,
+sum(frequency) over(order by num)rnk,
+sum(frequency) over()as total_terms
+from numbers )
+select
+case
+when total_terms%2!=0 then 
+ (select 
+  num
+ from cte 
+  where rnk>=total_terms/2 order by rnk  limit 1
+ ) 
+else (
+ (select 
+  num
+ from cte 
+  where rnk>=total_terms/2 order by rnk  limit 1
+ ) +
+ 
+ (select 
+  num
+ from cte 
+  where rnk>=(total_terms/2)+1 order by rnk  limit 1
+ )
+)/2
+end  as median
+from cte group by median ;
+
+
+SELECT
+AVG(d.frequency) as Median
+FROM
+(SELECT @rowindex:=@rowindex + 1 AS rowindex,
+Numbers.frequency AS frequency
+FROM Numbers
+ORDER BY Numbers.frequency) AS d
+WHERE
+d.rowindex IN (FLOOR(@rowindex / 2), CEIL(@rowindex / 2));
+
+
+
+
+
+-- query 91
+
+-- Create Employee table
+CREATE TABLE Employee_v1 (
+    employee_id INT PRIMARY KEY,
+    department_id INT
+);
+
+-- Insert data into Employee table
+INSERT INTO Employee_v1 (employee_id, department_id) VALUES
+(1, 1),
+(2, 2),
+(3, 2);
+
+
+-- Create Salary table
+CREATE TABLE Salary (
+    id INT PRIMARY KEY,
+    employee_id INT,
+    amount INT,
+    pay_date DATE,
+    FOREIGN KEY (employee_id) REFERENCES Employee_v1(employee_id)
+);
+
+-- Insert data into Salary table
+INSERT INTO Salary (id, employee_id, amount, pay_date) VALUES
+(1, 1, 9000, '2017-03-31'),
+(2, 2, 6000, '2017-03-31'),
+(3, 3, 10000, '2017-03-31'),
+(4, 1, 7000, '2017-02-28'),
+(5, 2, 6000, '2017-02-28'),
+(6, 3, 8000, '2017-02-28');
+
+with cte as(
+select s.*,e.department_id
+from salary s 
+join employee_v1 e
+on s.employee_id=e.employee_id
+),
+aggregated as(
+select pay_date,department_id,
+avg(amount) over(partition by department_id,pay_date order by pay_date) as employee_avg,
+avg(amount) over(partition by pay_date)as company_avg
+from cte
+)
+select  distinct date_format(pay_date,"%Y-%m")as pay_date,department_id,
+case
+when employee_avg = company_avg
+ then 'same'
+when employee_avg >
+company_avg then 'higher'
+when employee_avg <
+company_avg then 'lower'
+end  as  comparision
+from aggregated; 
+
+-- query 92
+
+-- Drop table if it exists
+DROP TABLE IF EXISTS Activity;
+
+-- Create Activity table
+CREATE TABLE Activity (
+    player_id INT,
+    device_id INT,
+    event_date DATE,
+    games_played INT
+);
+-- Insert sample data
+
+INSERT INTO Activity (player_id, device_id, event_date, games_played) VALUES
+(1, 2, '2016-03-01', 5),
+(1, 2, '2016-03-02', 6),
+(2, 3, '2017-06-25', 1),
+(3, 1, '2016-03-01', 0),
+(3, 4, '2016-07-03', 5);
+
+
+with cte as(
+select player_id,min(event_date) as first_day from activity group by player_id
+),cte2 as(
+select 
+cte.player_id,cte.first_day,
+sum(
+case
+when timestampdiff(day,cte.first_day,a.event_date)=1 then 1 else 0
+end
+)login_secondday
+from cte left join activity a
+on cte.player_id = a.player_id
+group by cte.player_id)
+select first_day as install_dt,
+count(1) as installs,
+ round(sum(login_secondday)/count(1),2) as Day1_retention from cte2
+group by first_day
+;
+
+
+
+
+
+
+-- query 93
+-- Drop if already exists
+DROP TABLE IF EXISTS Matches;
+DROP TABLE IF EXISTS Players;
+
+-- Create Players table
+CREATE TABLE Players (
+    player_id INT PRIMARY KEY,
+    group_id INT
+);
+
+-- Insert data into Players
+INSERT INTO Players (player_id, group_id) VALUES
+(15, 1),
+(25, 1),
+(30, 1),
+(45, 1),
+(10, 2),
+(35, 2),
+(50, 2),
+(20, 3),
+(40, 3);
+
+
+
+-- Create Matches table
+CREATE TABLE Matches (
+    match_id INT PRIMARY KEY,
+    first_player INT,
+    second_player INT,
+    first_score INT,
+    second_score INT,
+    FOREIGN KEY (first_player) REFERENCES Players(player_id),
+    FOREIGN KEY (second_player) REFERENCES Players(player_id)
+);
+
+-- Insert data into Matches
+INSERT INTO Matches (match_id, first_player, second_player, first_score, second_score) VALUES
+(1, 15, 45, 3, 0),
+(2, 30, 25, 1, 2),
+(3, 30, 15, 2, 0),
+(4, 40, 20, 5, 2),
+(5, 35, 50, 1, 1);
+
+--  The winner in each group is the player who scored the maximum total points within the group. In the
+--  case of a tie, the lowest player_id wins.
+--  Write an SQL query to find the winner in each group.
+with cte as
+(
+select first_player as player , first_score score,p.group_id from matches m
+join  players p
+on  p.player_id = m.first_player
+union all
+select second_player as player , second_score score ,p.group_id from matches m
+join  players p
+on  p.player_id = m.second_player
+),
+cte2 as (select player,group_id,
+sum(score) as total_score  from cte  group by  player 
+),
+player_rnk as (select player,group_id, rank() over(partition by group_id order by total_score desc ,player )rnk
+from cte2)
+select player as player_id,group_id from player_rnk where rnk=1;
+
+-- query 95
+-- Create Student table
+CREATE TABLE Student (
+    student_id INT PRIMARY KEY,
+    student_name VARCHAR(50)
+);
+
+-- Create Exam table
+CREATE TABLE Exam (
+    exam_id INT,
+    student_id INT,
+    score INT,
+    PRIMARY KEY (exam_id, student_id),
+    FOREIGN KEY (student_id) REFERENCES Student(student_id)
+);
+
+-- Insert data into Student table
+INSERT INTO Student (student_id, student_name) VALUES
+(1, 'Daniel'),
+(2, 'Jade'),
+(3, 'Stella'),
+(4, 'Jonathan'),
+(5, 'Will');
+
+-- Insert data into Exam table
+INSERT INTO Exam (exam_id, student_id, score) VALUES
+(10, 1, 70),
+(10, 2, 80),
+(10, 3, 90),
+(20, 1, 80),
+(30, 1, 70),
+(30, 3, 80),
+(30, 4, 90),
+(40, 1, 60),
+(40, 2, 70),
+(40, 4, 80);
+
+
+ -- Write an SQL query to report the students (student_id, student_name) being quiet in all exams. Do not
+--  return the student who has never taken any exam.
+--  Return the result table ordered by student_id.
+with cte as (
+select exam_id,max(score)as highest,min(score)as lowest
+from exam group by exam_id
+)
+select student_id,student_name from student s where student_id in (
+select e.student_id
+from cte join exam e
+on e.exam_id=cte.exam_id
+group by  e.student_id
+having count(*) =  sum(
+case
+ when e.score not in  (cte.highest , cte.lowest) then 1 else 0
+end
+));
+
+
+
+
+
+-- query 96
+CREATE TABLE songs_history (
+    history_id INT PRIMARY KEY,
+    user_id INT,
+    song_id INT,
+    song_plays INT
+);
+
+CREATE TABLE songs_weekly (
+    user_id INT,
+    song_id INT,
+    listen_time DATETIME
+);
+INSERT INTO songs_history (history_id, user_id, song_id, song_plays) VALUES
+(10011, 777, 1238, 11),
+(12452, 695, 4520, 1);
+INSERT INTO songs_weekly (user_id, song_id, listen_time) VALUES
+(777, 1238, '2022-08-01 12:00:00'),
+(695, 4520, '2022-08-04 08:00:00'),
+(125, 9630, '2022-08-04 16:00:00'),
+(695, 9852, '2022-08-07 12:00:00');
+
+-- You're given two tables on Spotify users' streaming data. songs_history table contains the historical
+--  streaming data and songs_weekly table contains the current week's streaming data.
+--  Write a query to output the user id, song id, and cumulative count of song plays as of 4 August 2022
+--  sorted in descending order
+select user_id,song_id,sum(song_count)as song_plays from (
+select
+user_id,song_id,
+count(1)as song_count
+from songs_weekly 
+where Date(listen_time)<="2022-08-04" group by user_id,song_id
+
+union all
+select user_id,song_id,song_plays as song_count
+from songs_history 
+) temp group by user_id,song_id order by song_plays desc ;
+
+-- or
+with cte as(
+select
+user_id,song_id,
+count(1)as song_count
+from songs_weekly 
+where Date(listen_time)<="2022-08-04" group by user_id,song_id
+)
+select user_id,song_id,song_count
+from cte join 
+songs_history h 
+
+
+
+-- query 97
+-- Emails table
+CREATE TABLE emails (
+    email_id INT PRIMARY KEY,
+    user_id INT,
+    signup_date DATETIME
+);
+
+INSERT INTO emails (email_id, user_id, signup_date) VALUES
+(125, 7771, '2022-06-14 00:00:00'),
+(236, 6950, '2022-07-01 00:00:00'),
+(433, 1052, '2022-07-09 00:00:00');
+
+
+-- Texts table
+CREATE TABLE texts (
+    text_id INT PRIMARY KEY,
+    email_id INT,
+    signup_action VARCHAR(50),
+    FOREIGN KEY (email_id) REFERENCES emails(email_id)
+);
+
+INSERT INTO texts (text_id, email_id, signup_action) VALUES
+(6878, 125, 'Confirmed'),
+(6920, 236, 'Not Confirmed'),
+(6994, 236, 'Confirmed');
+
+select count(1)/(select count(1) from emails)as confirm_rate
+from texts join emails
+on texts.email_id=emails.email_id
+and texts.signup_action='confirmed';
+
+
+-- query 98
+
+-- Table: tweets
+CREATE TABLE tweets (
+    tweet_id INT PRIMARY KEY,
+    user_id INT,
+    tweet_date DATETIME
+);
+
+-- Insert data into tweets
+INSERT INTO tweets (tweet_id, user_id, tweet_date) VALUES
+(214252, 111, '2022-06-01 12:00:00'),
+(739252, 111, '2022-06-01 12:00:00'),
+(846402, 111, '2022-06-02 12:00:00'),
+(241425, 254, '2022-06-02 12:00:00'),
+(137374, 111, '2022-06-04 12:00:00');
+with cte as(
+select user_id,tweet_date,count(1)as tweets_per_user_per_day
+from tweets group by tweet_date,user_id
+)
+select user_id,
+tweet_date,
+round(avg(tweets_per_user_per_day) over(partition by user_id order by tweet_date  rows between 3 preceding  and current row ),2)as rolling_avg_3days
+from cte ;
+
+-- query 99
+
+-- Table: activities
+CREATE TABLE activities (
+    activity_id INT PRIMARY KEY,
+    user_id INT,
+    activity_type VARCHAR(10), -- 'send', 'open', 'chat'
+    time_spent FLOAT,
+    activity_date DATETIME
+);
+
+-- Insert data into activities
+INSERT INTO activities (activity_id, user_id, activity_type, time_spent, activity_date) VALUES
+(7274, 123, 'open', 4.50, '2022-06-22 12:00:00'),
+(2425, 123, 'send', 3.50, '2022-06-22 12:00:00'),
+(1413, 456, 'send', 5.67, '2022-06-23 12:00:00'),
+(1414, 789, 'chat', 11.00, '2022-06-25 12:00:00'),
+(2536, 456, 'open', 3.00, '2022-06-25 12:00:00');
+
+-- Table: age_breakdown
+CREATE TABLE age_breakdown (
+    user_id INT PRIMARY KEY,
+    age_bucket VARCHAR(10)
+);
+
+-- Insert data into age_breakdown
+INSERT INTO age_breakdown (user_id, age_bucket) VALUES
+(123, '31-35'),
+(456, '26-30'),
+(789, '21-25');
+with cte as(
+select a.*,ab.age_bucket
+from
+activities a join age_breakdown ab
+on a.user_id = ab.user_id
+and a.activity_type in ('send','open')
+)
+select age_bucket,
+round(
+sum(
+case
+when activity_type='send' then time_spent else 0
+end  
+)*100/sum(time_spent),2) as send_perc,
+round(
+sum(
+case
+when activity_type='open' then time_spent else 0
+end 
+)*100/sum(time_spent),2) as open_perc
+from cte group by age_bucket;
+
+-- query 100
+-- Table: personal_profiles
+CREATE TABLE personal_profiles (
+    profile_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    followers INT
+);
+
+-- Insert data into personal_profiles
+INSERT INTO personal_profiles (profile_id, name, followers) VALUES
+(1, 'Nick Singh', 92000),
+(2, 'Zach Wilson', 199000),
+(3, 'Daliana Liu', 171000),
+(4, 'Ravit Jain', 107000),
+(5, 'Vin Vashishta', 139000),
+(6, 'Susan Wojcicki', 39000);
+
+
+-- Table: employee_company
+CREATE TABLE employee_company (
+    personal_profile_id INT,
+    company_id INT
+);
+
+-- Insert data into employee_company
+INSERT INTO employee_company (personal_profile_id, company_id) VALUES
+(1, 1),
+(2, 1),
+(3, 2),
+(4, 3),
+(5, 4),
+(6, 5);
+
+
+-- Table: company_pages
+CREATE TABLE company_pages (
+    company_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    followers INT
+);
+
+-- Insert data into company_pages
+INSERT INTO company_pages (company_id, name, followers) VALUES
+(1, 'The Data Science Podcast', 8000),
+(2, 'Airbnb', 700000),
+(3, 'The Ravit Show', 6000),
+(4, 'DataLemur', 200),
+(5, 'YouTube', 1600000),
+(6, 'DataScience.Vin', 4500),
+(9, 'Ace The Data Science Interview', 4479);
+
+select
+ ec.personal_profile_id
+from employee_company ec
+join company_pages cp 
+on ec.company_id= cp.company_id
+join 
+personal_profiles p
+on p.profile_id=ec.personal_profile_id
+where p.followers > cp.followers
+
