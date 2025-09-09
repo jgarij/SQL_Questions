@@ -358,3 +358,335 @@ dayname(shippeddate)as shipedday
 from datesfun;
 
 
+
+create database youtube;
+use youtube;
+
+
+-- query 1
+create table icc_world_cup
+(
+Team_1 Varchar(20),
+Team_2 Varchar(20),
+Winner Varchar(20)
+);
+INSERT INTO icc_world_cup values('India','SL','India');
+INSERT INTO icc_world_cup values('SL','Aus','Aus');
+INSERT INTO icc_world_cup values('SA','Eng','Eng');
+INSERT INTO icc_world_cup values('Eng','NZ','NZ');
+INSERT INTO icc_world_cup values('Aus','India','India');
+
+with cte as(
+select team_1 as team_name , 
+case
+when team_1=winner then 1
+else 0
+end
+as wining_count
+from icc_world_cup
+union all
+select team_2 as team_name , 
+case
+when team_2=winner then 1
+else 0
+end
+as wining_count 
+from icc_world_cup
+ )
+ select team_name,
+ count(1) as matches_played,
+ sum(wining_count)as no_of_wins,
+ count(1)- sum(wining_count) as no_of_looses
+ from cte group by team_name;
+
+
+-- query 2
+-- Daily how many new customers are coming and how many are old one?
+
+create table customer_orders (
+order_id integer,
+customer_id integer,
+order_date date,
+order_amount integer
+);
+
+insert into customer_orders values
+(1,100,cast('2022-01-01' as date),2000)
+,(2,200,cast('2022-01-01' as date),2500)
+,(3,300,cast('2022-01-01' as date),2100)
+,(4,100,cast('2022-01-02' as date),2000),
+(5,400,cast('2022-01-02' as date),2200),
+(6,500,cast('2022-01-02' as date),2700)
+,(7,100,cast('2022-01-03' as date),3000),
+(8,400,cast('2022-01-03' as date),1000),
+(9,600,cast('2022-01-03' as date),3000);
+
+with cte as(
+select customer_id , min(order_date)as first_login from customer_orders group by customer_id
+),
+cte2 as (select
+co.*,cte.first_login,
+case
+when co.order_date=cte.first_login then 1 else 0
+end as new_user,
+case when co.order_date!=cte.first_login then 1 else 0
+end as old_user
+from customer_orders co
+join cte 
+on co.customer_id=cte.customer_id
+)
+
+select order_date,sum(new_user),sum(old_user) from cte2 group by order_date;
+
+-- query 3
+create table entries ( 
+name varchar(20),
+address varchar(20),
+email varchar(20),
+floor int,
+resources varchar(10));
+
+insert into entries 
+values ('A','Bangalore','A@gmail.com',1,'CPU'),
+('A','Bangalore','A1@gmail.com',1,'CPU'),
+('A','Bangalore','A2@gmail.com',2,'DESKTOP')
+,('B','Bangalore','B@gmail.com',2,'DESKTOP'),
+('B','Bangalore','B1@gmail.com',2,'DESKTOP'),
+('B','Bangalore','B2@gmail.com',1,'MONITOR');
+
+select name,count(1) as total_number_of_visits,max(floor),group_concat( distinct resources)as resources_used
+from entries group by name;
+
+-- query Amazon
+-- write a query to provide date for nth occurence of sunday in future from given date;
+-- let say today is 2025-09-06 -- saturday 
+
+-- WITH RECURSIVE nsunday AS (
+--     SELECT 
+--         case 
+-- when dayname("2025-09-06")='Sunday' then date_add("2025-09-06",interval 7 day)
+-- when dayname("2025-09-06")='Monday' then date_add("2025-09-06",interval 6 day)
+-- when dayname("2025-09-06")='Tuesday' then date_add("2025-09-06",interval 5 day)
+-- when dayname("2025-09-06")='Wednesday' then date_add("2025-09-06",interval 4 day)
+-- when dayname("2025-09-06")='Thursday' then date_add("2025-09-06",interval 3 day)
+-- when dayname("2025-09-06")='Friday' then date_add("2025-09-06",interval 2 day)
+-- when dayname("2025-09-06")='Saturday' then date_add("2025-09-06",interval 1 day)
+-- end as sunday_date,
+
+--         1 AS n
+--     UNION ALL
+--     -- recursive: add 7 days repeatedly
+--     SELECT 
+--         DATE_ADD(sunday_date, INTERVAL 7 DAY) AS sunday_date,
+--         n + 1 AS n
+--     FROM nsunday
+--     WHERE n < 10  -- next 10 Sundays
+-- )
+
+-- or
+with recursive nsunday as(
+select date_add("2025-09-07",interval 7-dayofweek("2025-09-07") day) as sunday ,
+ 1 as n
+ union 
+ select date_add(sunday , interval 7 day)as sunday , n+1 as n
+ from nsunday   where n< 5
+)
+SELECT * 
+FROM nsunday;
+
+use youtube;
+
+
+
+-- query 4
+
+-- how we can find out top 20 % products which gives 80% of the sales.
+-- This is also known as pareto principle. We will implement it in SQL. 
+
+DESCRIBE superstore_orders;
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/Superstore_orders.csv'
+INTO TABLE superstore_orders
+FIELDS TERMINATED BY ','
+ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(Row_ID, Order_ID, Order_Date, Ship_Date, Ship_Mode, Customer_ID, Customer_Name, Segment, `Country/Region`, City, State, @Postal_Code, Region, Product_ID, Category, Sub_Category, Product_Name, Sales, Quantity, Discount, Profit)
+SET Postal_Code = NULLIF(@Postal_Code, '');
+
+
+ALTER TABLE superstore_orders MODIFY Postal_Code VARCHAR(20);
+
+
+UPDATE superstore_orders 
+SET Postal_Code = NULL 
+WHERE Postal_Code = '';
+ALTER TABLE superstore_orders MODIFY Postal_Code INT;
+
+
+with cte as(
+select product_id, sum(sales)as total_sales_per_Category from superstore_orders
+group by product_id
+),
+cte2 as(
+select product_id,total_sales_per_category,sum(total_sales_per_category)
+over(order by total_sales_per_category desc)
+as total_sales ,
+sum(total_sales_per_category) over() *0.8 as grand_total ,
+row_number() over(order by total_sales_per_category desc)as rnk,
+count(1)  over() *0.2 as total_products_count
+from cte )
+select * from cte2
+where total_sales <=grand_total 
+and rnk<= total_products_count;
+
+
+-- query 6
+Create table friend (pid int, fid int);
+insert into friend (pid , fid ) values ('1','2');
+insert into friend (pid , fid ) values ('1','3');
+insert into friend (pid , fid ) values ('2','1');
+insert into friend (pid , fid ) values ('2','3');
+insert into friend (pid , fid ) values ('3','5');
+insert into friend (pid , fid ) values ('4','2');
+insert into friend (pid , fid ) values ('4','3');
+insert into friend (pid , fid ) values ('4','5');
+
+create table person (PersonID int,	Name varchar(50),	Score int);
+insert into person(PersonID,Name ,Score) values('1','Alice','88');
+insert into person(PersonID,Name ,Score) values('2','Bob','11');
+insert into person(PersonID,Name ,Score) values('3','Devis','27');
+insert into person(PersonID,Name ,Score) values('4','Tara','45');
+insert into person(PersonID,Name ,Score) values('5','John','63');
+select * from person;
+-- select * from friend
+-- find whose friend got more than 100 marks
+select pid,name,sum(score)frndScore from person p join friend f
+on f.fid=p.personId group by pid having frndScore>100;
+
+-- query 7
+
+Create table  Trips (id int, client_id int, driver_id int, city_id int, status varchar(50), request_at varchar(50));
+Create table Users (users_id int, banned varchar(50), role varchar(50));
+Truncate table Trips;
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('1', '1', '10', '1', 'completed', '2013-10-01');
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('2', '2', '11', '1', 'cancelled_by_driver', '2013-10-01');
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('3', '3', '12', '6', 'completed', '2013-10-01');
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('4', '4', '13', '6', 'cancelled_by_client', '2013-10-01');
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('5', '1', '10', '1', 'completed', '2013-10-02');
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('6', '2', '11', '6', 'completed', '2013-10-02');
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('7', '3', '12', '6', 'completed', '2013-10-02');
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('8', '2', '12', '12', 'completed', '2013-10-03');
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('9', '3', '10', '12', 'completed', '2013-10-03');
+insert into Trips (id, client_id, driver_id, city_id, status, request_at) values ('10', '4', '13', '12', 'cancelled_by_driver', '2013-10-03');
+Truncate table Users;
+insert into Users (users_id, banned, role) values ('1', 'No', 'client');
+insert into Users (users_id, banned, role) values ('2', 'Yes', 'client');
+insert into Users (users_id, banned, role) values ('3', 'No', 'client');
+insert into Users (users_id, banned, role) values ('4', 'No', 'client');
+insert into Users (users_id, banned, role) values ('10', 'No', 'driver');
+insert into Users (users_id, banned, role) values ('11', 'No', 'driver');
+insert into Users (users_id, banned, role) values ('12', 'No', 'driver');
+insert into Users (users_id, banned, role) values ('13', 'No', 'driver');
+
+-- write a query to find cancallation rate of trips 
+-- with unbaned users btw 1 to 3 to oct 2013
+use youtube;
+select * from trips;
+with cte as(
+select t.client_id,t.driver_id,t.status,u1.banned as client_status,u2.banned as driver_status,t.request_at
+from trips t
+join users u1 
+on t.client_id = u1.users_id 
+join users u2
+on t.driver_id = u2.users_id 
+)
+,cte2 as(select request_at,
+sum(
+case
+when status!='completed' and client_status='no' and driver_status='no'then 1 else 0
+end 
+)cancelled_request_by_unbanned ,
+sum(
+case 
+when client_status='no' and driver_status='no' then 1 else 0
+end
+) as total_unbanned_request
+ from 
+cte group by request_at)
+select request_at,round((cancelled_request_by_unbanned/total_unbanned_request),2) from cte2;
+
+-- or 
+
+WITH valid_trips AS (
+    SELECT 
+        t.request_at,
+        t.status,
+        u1.banned AS client_status,
+        u2.banned AS driver_status
+    FROM Trips t
+    JOIN Users u1 ON t.client_id = u1.users_id
+    JOIN Users u2 ON t.driver_id = u2.users_id
+    WHERE t.request_at BETWEEN '2013-10-01' AND '2013-10-03'
+)
+SELECT 
+    request_at,
+    ROUND(
+        SUM(CASE 
+                WHEN status IN ('cancelled_by_driver','cancelled_by_client') 
+                     AND client_status = 'No' 
+                     AND driver_status = 'No' 
+                THEN 1 ELSE 0 END
+        ) * 1.0 /
+        SUM(CASE 
+                WHEN client_status = 'No' AND driver_status = 'No' 
+                THEN 1 ELSE 0 END),
+        2
+    ) AS cancellation_rate
+FROM valid_trips
+GROUP BY request_at
+ORDER BY request_at;
+
+
+-- query 8
+
+create table players
+(player_id int,
+group_id int);
+
+insert into players values (15,1);
+insert into players values (25,1);
+insert into players values (30,1);
+insert into players values (45,1);
+insert into players values (10,2);
+insert into players values (35,2);
+insert into players values (50,2);
+insert into players values (20,3);
+insert into players values (40,3);
+
+create table matches
+(
+match_id int,
+first_player int,
+second_player int,
+first_score int,
+second_score int);
+
+insert into matches values (1,15,45,3,0);
+insert into matches values (2,30,25,1,2);
+insert into matches values (3,30,15,2,0);
+insert into matches values (4,40,20,5,2);
+insert into matches values (5,35,50,1,1);
+
+-- which player won in each group
+with cte as(
+select first_player as player,first_score as score ,group_id from matches
+join players p on p.player_id=first_player
+union 
+select second_player as player , second_score as score,group_id from matches join players p on p.player_id=second_player
+)
+,cte2 as(select group_id,player,sum(score) as score
+from cte  group by player),
+cte3 as (
+select player , row_number() over(partition by group_id order by score desc, player ) rnk from  cte2)
+select * from cte3 where rnk=1 ;
+
